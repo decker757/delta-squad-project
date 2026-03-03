@@ -1,27 +1,12 @@
-# Delta Squad — End-to-End Crypto Trading Pipeline
+
 
 An event-driven algorithmic trading pipeline that ingests real-time market data, runs it through a Moving Average Crossover strategy, and executes orders automatically on Binance.
 
 ---
 
 ## Architecture
+![Untitled-2026-03-03-1208 (1)](https://github.com/user-attachments/assets/913a7e30-b47f-4ece-962d-1d5770f5ba94)
 
-```
-Binance WS
-    │
-    ▼
-Market Data Service  ──►  Kafka  ──►  Strategy Service  ──►  Kafka  ──►  Kill Switch Service
-                                                                               │
-                                          ┌────────────────────────────────────┤
-                                          │                                    │
-                                     approved_order                      blocked_order
-                                          │                                    │
-                                          ▼                                    ▼
-                                  Execution Service               Logger / Notifier Service
-                                          │
-                                          ▼
-                                  Position Service (DB)
-```
 
 Each service communicates exclusively via Kafka topics — no direct service-to-service calls. This means any service can be scaled, restarted, or swapped independently.
 
