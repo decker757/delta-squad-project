@@ -1,28 +1,29 @@
 import logging
 
 from .binance_client import BinanceBookTickerClient
-from .config import Config
 from .publisher import KafkaPublisher
 from .schemas import parse_book_ticker
 
 class MarketDataService:
-    def __init__(self, logger: logging.Logger):
+    def __init__(
+        self,
+        symbol: str,
+        topic: str,
+        client: BinanceBookTickerClient,
+        publisher: KafkaPublisher,
+        logger: logging.Logger,
+    ):
+        self.symbol = symbol
+        self.topic = topic
+        self.client = client
+        self.publisher = publisher
         self.logger = logger
-        self.client = BinanceBookTickerClient(
-            ws_url=Config.BINANCE_WS_URL,
-            reconnect_delay=Config.RECONNECT_DELAY_SECONDS,
-            logger=logger
-        )
-        self.publisher = KafkaPublisher(
-            bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
-            logger=logger
-        )
-    
+
     async def run(self) -> None:
         self.logger.info(
             "starting MarketDataService symbol=%s topic=%s",
-            Config.SYMBOL,
-            Config.MARKET_DATA_TOPIC
+            self.symbol,
+            self.topic,
         )
 
         try:
@@ -30,7 +31,7 @@ class MarketDataService:
                 try:
                     event = parse_book_ticker(raw_payload)
                     self.publisher.publish(
-                        topic=Config.MARKET_DATA_TOPIC,
+                        topic=self.topic,
                         payload=event.to_dict(),
                         key=event.symbol,
                     )
@@ -40,7 +41,7 @@ class MarketDataService:
                         event.symbol,
                         event.bid,
                         event.ask,
-                        event.mid
+                        event.mid,
                     )
                 except Exception as e:
                     self.logger.exception(

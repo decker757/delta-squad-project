@@ -1,7 +1,9 @@
 import asyncio
 import logging
 
+from .binance_client import BinanceBookTickerClient
 from .config import Config
+from .publisher import KafkaPublisher
 from .service import MarketDataService
 
 
@@ -23,7 +25,23 @@ def setup_logger() -> logging.Logger:
 
 async def async_main() -> None:
     logger = setup_logger()
-    service = MarketDataService(logger=logger)
+
+    client = BinanceBookTickerClient(
+        ws_url=Config.BINANCE_WS_URL,
+        reconnect_delay=Config.RECONNECT_DELAY_SECONDS,
+        logger=logger,
+    )
+    publisher = KafkaPublisher(
+        bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
+        logger=logger,
+    )
+    service = MarketDataService(
+        symbol=Config.SYMBOL,
+        topic=Config.MARKET_DATA_TOPIC,
+        client=client,
+        publisher=publisher,
+        logger=logger,
+    )
     await service.run()
 
 
