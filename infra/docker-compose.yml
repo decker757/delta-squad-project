@@ -37,6 +37,24 @@ services:
       LOG_LEVEL: INFO
     restart: unless-stopped
 
+  position-service:
+    build:
+      context: ../service/position_service
+      dockerfile: Dockerfile
+    container_name: position-service
+    depends_on:
+      - kafka
+    env_file:
+      - ../service/position_service/.env
+    environment:
+      SYMBOL: BTCUSDT
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EXECUTION_RESULT_TOPIC: execution_result
+      MARKET_DATA_TOPIC: market_data
+      CONSUMER_GROUP_ID: position-service
+      LOG_LEVEL: INFO
+    restart: unless-stopped
+
   market-data-service:
     build:
       context: ../service/market_data_service
