@@ -1,3 +1,5 @@
+import pytest
+
 from app.schemas import parse_book_ticker
 
 
@@ -31,8 +33,5 @@ def test_parse_book_ticker_invalid_bid_ask():
         "A": "0.8",
     }
 
-    try:
+    with pytest.raises(ValueError):
         parse_book_ticker(payload)
-        assert False, "Expected ValueError"
-    except ValueError:
-        assert True

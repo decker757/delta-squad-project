@@ -22,13 +22,14 @@ class KafkaPublisher:
                 msg.offset()
             )
     
-    def publish(self, topic: str, payload: Dict[str, Any]) -> None:
+    def publish(self, topic: str, payload: Dict[str, Any], key: str | None = None) -> None:
         data = json.dumps(payload).encode("utf-8")
 
         self.producer.poll(0)
 
         self.producer.produce(
             topic=topic,
+            key=key.encode("utf-8") if key else None,
             value=data,
             callback=self._delivery_callback,
         )

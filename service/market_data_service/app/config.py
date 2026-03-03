@@ -8,11 +8,11 @@ class Config:
 
     BINANCE_WS_BASE_URL = os.getenv(
         "BINANCE_WS_BASE_URL",
-        "wss://stream.binance.com:9443/ws/btcusdt@bookTicker",
+        "wss://stream.binance.com:9443/ws",
     )
     BINANCE_WS_URL = f"{BINANCE_WS_BASE_URL}/{STREAM_SYMBOL}@bookTicker"
 
-    KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOSTRAP_SERVERS",  "kafka:9092")
+    KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS",  "kafka:9092")
     MARKET_DATA_TOPIC = os.getenv("MARKET_DATA_TOPIC", "market_data")
 
     RECONNECT_DELAY_SECONDS = float(os.getenv("RECONNECT_DELAY_SECONDS", "3"))

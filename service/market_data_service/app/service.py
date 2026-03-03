@@ -9,7 +9,7 @@ class MarketDataService:
     def __init__(self, logger: logging.Logger):
         self.logger = logger
         self.client = BinanceBookTickerClient(
-            ws_url=Config.BINANCE_WS_BASE_URL,
+            ws_url=Config.BINANCE_WS_URL,
             reconnect_delay=Config.RECONNECT_DELAY_SECONDS,
             logger=logger
         )
@@ -32,6 +32,7 @@ class MarketDataService:
                     self.publisher.publish(
                         topic=Config.MARKET_DATA_TOPIC,
                         payload=event.to_dict(),
+                        key=event.symbol,
                     )
 
                     self.logger.info(
