@@ -19,6 +19,24 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     restart: unless-stopped
   
+  strategy-service:
+    build:
+      context: ../service/strategy_service
+      dockerfile: Dockerfile
+    container_name: strategy-service
+    depends_on:
+      - kafka
+    environment:
+      SYMBOL: BTCUSDT
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      MARKET_DATA_TOPIC: market_data
+      TRADE_SIGNAL_TOPIC: trade_signal
+      CONSUMER_GROUP_ID: strategy-service
+      SHORT_WINDOW: 7
+      LONG_WINDOW: 25
+      LOG_LEVEL: INFO
+    restart: unless-stopped
+
   market-data-service:
     build:
       context: ../service/market_data_service

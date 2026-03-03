@@ -1,11 +1,10 @@
-import asyncio
 import logging
-import signal
 
-from .binance_client import BinanceBookTickerClient
 from .config import Config
+from .consumer import KafkaConsumer
 from .publisher import KafkaPublisher
-from .service import MarketDataService
+from .service import StrategyService
+from .strategy import MACrossoverStrategy
 
 
 def setup_logger() -> logging.Logger:
@@ -24,37 +23,33 @@ def setup_logger() -> logging.Logger:
     return logger
 
 
-async def async_main() -> None:
+def main() -> None:
     logger = setup_logger()
 
-    client = BinanceBookTickerClient(
-        ws_url=Config.BINANCE_WS_URL,
-        reconnect_delay=Config.RECONNECT_DELAY_SECONDS,
+    consumer = KafkaConsumer(
+        bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
+        group_id=Config.CONSUMER_GROUP_ID,
+        topic=Config.MARKET_DATA_TOPIC,
         logger=logger,
     )
     publisher = KafkaPublisher(
         bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
         logger=logger,
     )
-    service = MarketDataService(
+    strategy = MACrossoverStrategy(
+        short_window=Config.SHORT_WINDOW,
+        long_window=Config.LONG_WINDOW,
+    )
+    service = StrategyService(
         symbol=Config.SYMBOL,
-        topic=Config.MARKET_DATA_TOPIC,
-        client=client,
+        signal_topic=Config.TRADE_SIGNAL_TOPIC,
+        consumer=consumer,
         publisher=publisher,
+        strategy=strategy,
         logger=logger,
     )
-
-    loop = asyncio.get_running_loop()
-    task = asyncio.create_task(service.run())
-
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, task.cancel)
-
-    try:
-        await task
-    except asyncio.CancelledError:
-        logger.info("Shutdown signal received, stopping gracefully")
+    service.run()
 
 
 if __name__ == "__main__":
-    asyncio.run(async_main())
+    main()
