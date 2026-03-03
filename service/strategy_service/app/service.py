@@ -50,7 +50,7 @@ class StrategyService:
                     if result is None:
                         continue
 
-                    signal = TradeSignal(
+                    trade_signal = TradeSignal(
                         symbol=event.symbol,
                         side=result.side,
                         short_ma=result.short_ma,
@@ -60,16 +60,16 @@ class StrategyService:
                     )
                     self.publisher.publish(
                         topic=self.signal_topic,
-                        payload=signal.to_dict(),
+                        payload=trade_signal.to_dict(),
                         key=event.symbol,
                     )
                     self.logger.info(
                         "Signal emitted side=%s symbol=%s short_ma=%.4f long_ma=%.4f mid=%.4f",
-                        signal.side,
-                        signal.symbol,
-                        signal.short_ma,
-                        signal.long_ma,
-                        signal.mid,
+                        trade_signal.side,
+                        trade_signal.symbol,
+                        trade_signal.short_ma,
+                        trade_signal.long_ma,
+                        trade_signal.mid,
                     )
                 except Exception as e:
                     self.logger.exception(
