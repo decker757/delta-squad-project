@@ -70,3 +70,28 @@ services:
       RECONNECT_DELAY_SECONDS: 3
       LOG_LEVEL: INFO
     restart: unless-stopped
+     
+     # added by JIan HAOOO ---
+  producer_service:
+    build:
+      context: ../service/producer_service
+    container_name: producer_service
+    depends_on:
+      - kafka
+
+  kill_switch_service:
+    build:
+      context: ../service/kill_switch_service
+    container_name: kill_switch_service
+    depends_on:
+      - kafka
+  execution_service:
+    build:
+      context: ../service/execution_service
+    container_name: execution_service
+    depends_on:
+      - kafka
+      - kill_switch_service
+  
+
+      #notme leeeeee JianHao
