@@ -18,7 +18,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     restart: unless-stopped
-  
+
   strategy-service:
     build:
       context: ../service/strategy_service
@@ -70,28 +70,42 @@ services:
       RECONNECT_DELAY_SECONDS: 3
       LOG_LEVEL: INFO
     restart: unless-stopped
-     
-     # added by JIan HAOOO ---
-  producer_service:
+
+  producer-service:
     build:
       context: ../service/producer_service
-    container_name: producer_service
+    container_name: producer-service
     depends_on:
       - kafka
+      - market-data-service
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SYMBOL: BTCUSDT
+      QUANTITY: 0.01
+      SIGNAL_INTERVAL_SECONDS: 5
+    restart: unless-stopped
 
-  kill_switch_service:
+  kill-switch-service:
     build:
       context: ../service/kill_switch_service
-    container_name: kill_switch_service
+    container_name: kill-switch-service
     depends_on:
       - kafka
-  execution_service:
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      COOLDOWN_SECONDS: 3
+      MAX_POSITION: 1.0
+    restart: unless-stopped
+
+  execution-service:
     build:
       context: ../service/execution_service
-    container_name: execution_service
+    container_name: execution-service
     depends_on:
       - kafka
-      - kill_switch_service
-  
-
-      #notme leeeeee JianHao
+      - kill-switch-service
+    env_file:
+      - ../service/execution_service/.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    restart: unless-stopped

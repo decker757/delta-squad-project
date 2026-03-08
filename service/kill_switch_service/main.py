@@ -1,38 +1,49 @@
 import json
+import os
 import time
 import logging
 import uuid
+from collections import defaultdict
 from kafka import KafkaConsumer, KafkaProducer, errors
 
 # ----------------------------
-# INITIAL SETUP
-# ----------------------------
-time.sleep(15)  # wait for Kafka to spin up
-
 # Logging
+# ----------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kill-switch-service")
 
-# Kafka broker
-KAFKA_BROKER = "kafka:9092"
+# ----------------------------
+# Config
+# ----------------------------
+KAFKA_BROKER = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
+TRADE_SIGNAL_TOPIC = "trade_signal"
+APPROVED_TOPIC = "approved_order"
+BLOCKED_TOPIC = "blocked_order"
 
-# Wait until Kafka is reachable
+KAFKA_STARTUP_DELAY = 15
+COOLDOWN_SECONDS = float(os.getenv("COOLDOWN_SECONDS", "3"))
+MAX_POSITION = float(os.getenv("MAX_POSITION", "1.0"))
+
+REQUIRED_FIELDS = ["symbol", "side", "quantity", "type"]
+VALID_SIDES = ("BUY", "SELL")
+
+# ----------------------------
+# Wait for Kafka
+# ----------------------------
+time.sleep(KAFKA_STARTUP_DELAY)
 while True:
     try:
-        test_producer = KafkaProducer(bootstrap_servers=KAFKA_BROKER)
-        test_producer.close()
+        probe = KafkaProducer(bootstrap_servers=KAFKA_BROKER)
+        probe.close()
         logger.info("Kafka is reachable!")
         break
     except errors.NoBrokersAvailable:
         logger.info("Waiting for Kafka...")
         time.sleep(10)
 
-# Kafka topics
-TRADE_SIGNAL_TOPIC = "trade_signal"
-APPROVED_TOPIC = "approved_order"
-BLOCKED_TOPIC = "blocked_order"
-
-# Kafka consumer
+# ----------------------------
+# Kafka clients
+# ----------------------------
 consumer = KafkaConsumer(
     TRADE_SIGNAL_TOPIC,
     bootstrap_servers=KAFKA_BROKER,
@@ -41,57 +52,46 @@ consumer = KafkaConsumer(
     value_deserializer=lambda m: json.loads(m.decode("utf-8")),
 )
 
-# Kafka producer
 producer = KafkaProducer(
     bootstrap_servers=KAFKA_BROKER,
-    value_serializer=lambda v: json.dumps(v).encode("utf-8")
+    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
 )
 
 # ----------------------------
-# KILL-SWITCH CONFIG
+# State
+# NOTE: positions are in-memory only — they reset on service restart.
+# For production, back this with a persistent store (e.g. Redis).
 # ----------------------------
-positions = {"BTCUSDT": 0.0}  # example positions
-last_trade_time = {}
-COOLDOWN_SECONDS = 3  # prevent too-frequent trades
-MAX_POSITION = 1.0    # max allowed position per symbol
+positions: dict = defaultdict(float)
+last_trade_time: dict = {}
 
 # ----------------------------
-# RISK & COOLDOWN CHECKS
+# Risk & cooldown checks
 # ----------------------------
 def check_risk(symbol: str, side: str, quantity: float) -> bool:
-    new_pos = positions[symbol] + quantity if side == "BUY" else positions[symbol] - quantity
+    new_pos = positions[symbol] + (quantity if side == "BUY" else -quantity)
     if abs(new_pos) > MAX_POSITION:
         logger.warning(f"Trade BLOCKED due to position limit: {symbol} {side} {quantity}")
         return False
     return True
 
 def check_cooldown(symbol: str) -> bool:
-    now = time.time()
-    last = last_trade_time.get(symbol, 0)
-    elapsed = now - last
+    elapsed = time.time() - last_trade_time.get(symbol, 0)
     if elapsed < COOLDOWN_SECONDS:
-        remaining = COOLDOWN_SECONDS - elapsed
-        logger.info(f"Trade BLOCKED due to cooldown ({remaining:.3f} sec remaining)")
+        logger.info(f"Trade BLOCKED due to cooldown ({COOLDOWN_SECONDS - elapsed:.3f}s remaining)")
         return False
-    last_trade_time[symbol] = now
     return True
 
 # ----------------------------
-# PROCESS TRADE SIGNAL
+# Signal processing
 # ----------------------------
 def process_trade_signal(trade_signal: dict):
-    # Assign internal_id if missing
-    if "internal_id" not in trade_signal:
-        trade_signal["internal_id"] = str(uuid.uuid4())
+    trade_signal.setdefault("internal_id", str(uuid.uuid4()))
 
-    # Required fields
-    required_fields = ["internal_id", "symbol", "side", "quantity", "type"]
-    for f in required_fields:
-        if f not in trade_signal:
-            logger.warning(f"Incomplete trade signal, skipping: {trade_signal}")
-            return
+    if not all(f in trade_signal for f in REQUIRED_FIELDS):
+        logger.warning(f"Incomplete trade signal, skipping: {trade_signal}")
+        return
 
-    # Extract & normalize fields
     symbol = trade_signal["symbol"]
     side = trade_signal["side"]
     order_type = trade_signal["type"]
@@ -99,45 +99,40 @@ def process_trade_signal(trade_signal: dict):
     price = float(trade_signal["price"]) if trade_signal.get("price") else None
     time_in_force = trade_signal.get("timeInForce", "GTC") if order_type == "LIMIT" else None
 
-    # Cooldown & risk checks
-    if not check_cooldown(symbol) or not check_risk(symbol, side, quantity):
-        # Forward blocked trades
-        producer.send(BLOCKED_TOPIC, trade_signal)
+    if side not in VALID_SIDES:
+        logger.warning(f"Invalid side '{side}', must be one of {VALID_SIDES}, skipping: {trade_signal}")
         return
 
-    # Update positions
-    positions[symbol] = positions[symbol] + quantity if side == "BUY" else positions[symbol] - quantity
+    # Both checks must pass before committing any state
+    if not check_cooldown(symbol) or not check_risk(symbol, side, quantity):
+        producer.send(BLOCKED_TOPIC, trade_signal)
+        producer.flush()
+        return
 
-    # Construct Binance-ready trade
+    last_trade_time[symbol] = time.time()
+    positions[symbol] += quantity if side == "BUY" else -quantity
+
     binance_order = {
         "symbol": symbol,
         "side": side,
         "type": order_type,
         "quantity": quantity,
-        "internal_id": trade_signal["internal_id"]
+        "internal_id": trade_signal["internal_id"],
     }
-
     if order_type == "LIMIT":
         binance_order["price"] = price
         binance_order["timeInForce"] = time_in_force
 
-    # Log approval
-    logger.info(f"Trade APPROVED: {binance_order}")
-
-    # Forward to execution-service
-    forward_to_execution(binance_order)
+    producer.send(APPROVED_TOPIC, binance_order)
+    producer.flush()
+    logger.info(f"Trade APPROVED and forwarded to execution-service: {binance_order}")
 
 # ----------------------------
-# FORWARD TO EXECUTION-SERVICE
-# ----------------------------
-def forward_to_execution(trade: dict):
-    producer.send(APPROVED_TOPIC, trade)
-    logger.info(f"Forwarded trade to execution-service: {trade}")
-
-# ----------------------------
-# MAIN LOOP
+# Main loop
 # ----------------------------
 logger.info("Kill-switch service started, waiting for trade signals...")
 for msg in consumer:
-    raw_signal = msg.value
-    process_trade_signal(raw_signal)
+    try:
+        process_trade_signal(msg.value)
+    except Exception as e:
+        logger.error(f"Unhandled error processing message: {e}", exc_info=True)
