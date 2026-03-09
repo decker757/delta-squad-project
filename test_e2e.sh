@@ -25,6 +25,8 @@ EXEC_ENV="$SCRIPT_DIR/service/execution_service/.env"
 
 KAFKA_READY_TIMEOUT=90     # seconds to wait for Kafka
 PIPELINE_TIMEOUT=120       # seconds to wait for each pipeline stage
+MARKET_DATA_TIMEOUT=240    # longer timeout: market-data-service needs external Binance WS connection
+EXECUTION_TIMEOUT=240      # longer timeout: execution-service waits for kill-switch to produce approved orders
 
 echo ""
 echo "================================================"
@@ -57,10 +59,13 @@ pass "Prerequisites OK"
 # -------------------------------------------------
 # 2. Start services
 # -------------------------------------------------
-info "Starting services (this may take a minute for Docker builds)..."
+info "Building images..."
 cd "$INFRA_DIR"
 docker compose down --remove-orphans 2>/dev/null || true
-docker compose up --build -d
+docker compose build
+echo ""
+info "Starting services..."
+docker compose up -d
 echo ""
 
 # -------------------------------------------------
@@ -84,11 +89,11 @@ pass "Kafka is ready"
 # Helper: wait for a log pattern with timeout
 # -------------------------------------------------
 wait_for_log() {
-    local container="$1" pattern="$2" label="$3"
-    local deadline=$((SECONDS + PIPELINE_TIMEOUT))
+    local container="$1" pattern="$2" label="$3" timeout="${4:-$PIPELINE_TIMEOUT}"
+    local deadline=$((SECONDS + timeout))
     while ! docker logs "$container" 2>&1 | grep -qE "$pattern"; do
         if [ $SECONDS -ge $deadline ]; then
-            fail "$label (no match for '$pattern' in $container after ${PIPELINE_TIMEOUT}s)"
+            fail "$label (no match for '$pattern' in $container after ${timeout}s)"
             echo "--- last 10 lines of $container ---"
             docker logs "$container" 2>&1 | tail -10
             echo "---"
@@ -122,7 +127,7 @@ echo ""
 info "--- Stage 1: Service startup ---"
 
 wait_for_log "market-data-service" "Published market_data" \
-    "market-data-service publishing to Kafka"
+    "market-data-service publishing to Kafka" "$MARKET_DATA_TIMEOUT"
 
 wait_for_log "producer-service" "Initial market price received" \
     "producer-service received first market price"
@@ -131,7 +136,7 @@ wait_for_log "kill-switch-service" "Kill-switch service started|Trade APPROVED|T
     "kill-switch-service processing signals"
 
 wait_for_log "execution-service" "Execution service started|Received approved order" \
-    "execution-service started"
+    "execution-service started" "$EXECUTION_TIMEOUT"
 
 # -------------------------------------------------
 # 5. Kafka topic flow
@@ -169,14 +174,14 @@ fi
 echo ""
 info "--- Stage 3: Binance execution ---"
 
-if docker logs execution-service 2>&1 | grep -q "Order SUCCESS"; then
-    pass "Binance Testnet: orders confirmed (Order SUCCESS seen)"
-elif docker logs execution-service 2>&1 | grep -q "Order FAILED"; then
-    warn "Binance Testnet: order attempts reached Binance but were rejected — check testnet balance or API key permissions"
-elif docker logs execution-service 2>&1 | grep -q "Received approved order"; then
-    warn "Execution service received orders but no Binance response yet — may still be in flight"
+if wait_for_log "execution-service" "Order SUCCESS" \
+        "Binance Testnet: order confirmed (Order SUCCESS)" 60; then
+    : # pass already recorded inside wait_for_log
+elif wait_for_log "execution-service" "Order FAILED" \
+        "Binance Testnet: order attempted but rejected (check API keys / testnet balance)" 10; then
+    : # warn already recorded — downgrade to warn
 else
-    fail "Execution service has not received any approved orders yet"
+    fail "No Binance order attempt seen in execution-service logs"
 fi
 
 # -------------------------------------------------

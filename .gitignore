@@ -54,6 +54,9 @@ Thumbs.db
 kafka-data/
 zookeeper-data/
 
+# Live test files (contain secrets)
+test_*_live.py
+
 # Misc
 *.tmp
 *.swp
