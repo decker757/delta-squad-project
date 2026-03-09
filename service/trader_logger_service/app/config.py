@@ -22,7 +22,7 @@ class Config:
     ]
 
     DB_HOST = os.getenv("DB_HOST", "")
-    DB_PORT = int(os.getenv("DB_PORT") or "6543")  # 6543 = Supabase PgBouncer pooler
+    DB_PORT = int(os.getenv("DB_PORT") or "5432")
     DB_USER = os.getenv("DB_USER", "postgres")
     DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_NAME = os.getenv("DB_NAME", "postgres")

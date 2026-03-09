@@ -10,7 +10,7 @@ class KafkaConsumer:
         self._consumer = Consumer({
             "bootstrap.servers": bootstrap_servers,
             "group.id": group_id,
-            "auto.offset.reset": "latest"
+            "auto.offset.reset": "earliest"
         })
         self._consumer.subscribe(topic)
         self._stopped = False

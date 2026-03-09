@@ -35,6 +35,10 @@ class PositionService:
             self.consumer.close()
 
     def _on_execution_result(self, payload):
+        status = payload.get("status")
+        if status not in ("FILLED", "PARTIALLY_FILLED"):
+            self.logger.debug("Skipping non-fill status: %s", status)
+            return
         try:
             fill = parse_execution_result(payload)
             realized = self._position.apply_fill(fill.side, fill.quantity, fill.fill_price)

@@ -27,6 +27,7 @@ if not API_KEY or not API_SECRET:
 
 KAFKA_BROKER = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "kafka:9092")
 APPROVED_TOPIC = "approved_order"
+EXECUTION_RESULT_TOPIC = "execution_result"
 BASE_URL = "https://testnet.binance.vision/api/v3"
 KAFKA_STARTUP_DELAY = 15
 
@@ -53,6 +54,11 @@ consumer = KafkaConsumer(
     auto_offset_reset="earliest",
     enable_auto_commit=True,
     value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+)
+
+result_producer = KafkaProducer(
+    bootstrap_servers=KAFKA_BROKER,
+    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
 )
 
 # ----------------------------
@@ -99,6 +105,21 @@ def send_order_to_binance(order: dict):
         data = response.json()
         if response.status_code == 200 and "orderId" in data:
             logger.info(f"Order SUCCESS: internal_id={order['internal_id']} {data}")
+            fill_price = (
+                float(data["fills"][0]["price"]) if data.get("fills")
+                else float(data["price"])
+            )
+            result_producer.send(EXECUTION_RESULT_TOPIC, {
+                "order_id": str(data["orderId"]),
+                "symbol": symbol,
+                "side": side,
+                "quantity": float(quantity),
+                "fill_price": fill_price,
+                "status": data["status"],
+                "timestamp": time.time(),
+                "event_type": "execution_result",
+            })
+            result_producer.flush()
         else:
             logger.warning(f"Order FAILED: internal_id={order['internal_id']} {data}")
     except Exception as e:
