@@ -27,7 +27,9 @@ class KafkaConsumer:
                 self.logger.error("Consumer error: %s", msg.error())
                 continue
             try:
-                yield json.loads(msg.value().decode("utf-8"))
+                payload = json.loads(msg.value().decode("utf-8"))
+                payload.setdefault("event_type", msg.topic())
+                yield payload
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 self.logger.warning("Malformed message, skipping: %s", e)
                 continue
