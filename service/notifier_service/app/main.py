@@ -1,5 +1,6 @@
 import logging
 
+from .commands import CommandPoller
 from .config import Config
 from .consumer import KafkaConsumer
 from .telegram import TelegramClient
@@ -28,6 +29,24 @@ def main() -> None:
     if not Config.TELEGRAM_BOT_TOKEN or not Config.TELEGRAM_CHAT_ID:
         logger.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set as environment variables")
         raise SystemExit(1)
+
+    if Config.DB_HOST and Config.DB_PASSWORD:
+        db_config = {
+            "host": Config.DB_HOST,
+            "port": Config.DB_PORT,
+            "user": Config.DB_USER,
+            "password": Config.DB_PASSWORD,
+            "dbname": Config.DB_NAME,
+        }
+        CommandPoller(
+            bot_token=Config.TELEGRAM_BOT_TOKEN,
+            chat_id=Config.TELEGRAM_CHAT_ID,
+            db_config=db_config,
+            symbol=Config.SYMBOL,
+            logger=logger,
+        ).start()
+    else:
+        logger.warning("DB_HOST or DB_PASSWORD not set — /position command disabled")
 
     consumer = KafkaConsumer(
         bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
