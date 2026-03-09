@@ -1,10 +1,14 @@
 import json
 import logging
+import time
 import urllib.request
 import urllib.error
 from datetime import datetime, timezone
 
 from .schemas import ExecutionResult, BlockedOrder
+
+_MAX_RETRIES = 3
+_RETRY_BACKOFF_SECONDS = 2
 
 
 class TelegramClient:
@@ -17,10 +21,6 @@ class TelegramClient:
         self._url = self.BASE_URL.format(token=bot_token)
 
     def send_message(self, text: str) -> None:
-        if not self.bot_token or not self.chat_id:
-            self.logger.warning("Telegram credentials not set, skipping notification")
-            return
-
         payload = json.dumps({
             "chat_id": self.chat_id,
             "text": text,
@@ -33,12 +33,25 @@ class TelegramClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        try:
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status != 200:
-                    self.logger.error("Telegram API returned status %s", resp.status)
-        except urllib.error.URLError as e:
-            self.logger.error("Failed to send Telegram message: %s", e)
+
+        for attempt in range(1, _MAX_RETRIES + 1):
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status != 200:
+                        self.logger.error("Telegram API returned status %s", resp.status)
+                    return  # success (or non-retryable API error)
+            except urllib.error.URLError as e:
+                if attempt < _MAX_RETRIES:
+                    delay = _RETRY_BACKOFF_SECONDS * attempt
+                    self.logger.warning(
+                        "Telegram send failed (attempt %d/%d): %s — retrying in %ds",
+                        attempt, _MAX_RETRIES, e, delay,
+                    )
+                    time.sleep(delay)
+                else:
+                    self.logger.error(
+                        "Telegram send failed after %d attempts: %s", _MAX_RETRIES, e
+                    )
 
     def notify_execution(self, event: ExecutionResult) -> None:
         ts = datetime.fromtimestamp(event.timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")

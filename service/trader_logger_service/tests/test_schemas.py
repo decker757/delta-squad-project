@@ -51,10 +51,9 @@ def test_parse_missing_event_type():
         parse_event_log({"symbol": "BTCUSDT"})
 
 
-def test_parse_missing_symbol_defaults():
-    payload = {"event_type": "market_data"}
-    event = parse_event_log(payload)
-    assert event.symbol == "UNKNOWN"
+def test_parse_missing_symbol_raises():
+    with pytest.raises(ValueError, match="Missing required field: symbol"):
+        parse_event_log({"event_type": "market_data"})
 
 
 def test_to_dict():

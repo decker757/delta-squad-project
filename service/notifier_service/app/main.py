@@ -25,6 +25,10 @@ def setup_logger() -> logging.Logger:
 def main() -> None:
     logger = setup_logger()
 
+    if not Config.TELEGRAM_BOT_TOKEN or not Config.TELEGRAM_CHAT_ID:
+        logger.error("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set as environment variables")
+        raise SystemExit(1)
+
     consumer = KafkaConsumer(
         bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
         group_id=Config.CONSUMER_GROUP_ID,

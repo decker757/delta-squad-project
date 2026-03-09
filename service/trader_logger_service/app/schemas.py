@@ -21,7 +21,9 @@ def parse_event_log(raw: Dict[str, Any]) -> EventLog:
     if not event_type:
         raise ValueError("Missing event_type field")
 
-    symbol = raw.get("symbol", "UNKNOWN")
+    symbol = raw.get("symbol")
+    if not symbol:
+        raise ValueError("Missing required field: symbol")
 
     return EventLog(
         event_type=event_type,

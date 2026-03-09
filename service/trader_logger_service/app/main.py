@@ -25,6 +25,10 @@ def setup_logger() -> logging.Logger:
 def main() -> None:
     logger = setup_logger()
 
+    if not Config.DB_HOST or not Config.DB_PASSWORD:
+        logger.error("DB_HOST and DB_PASSWORD must be set as environment variables")
+        raise SystemExit(1)
+
     consumer = KafkaConsumer(
         bootstrap_servers=Config.KAFKA_BOOTSTRAP_SERVERS,
         group_id=Config.CONSUMER_GROUP_ID,
