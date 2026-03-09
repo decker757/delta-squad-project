@@ -48,6 +48,10 @@ class TradeSignal:
     long_ma: float
     mid: float
     timestamp: float
+    quantity: float
+    price: float
+    type: str = "LIMIT"
+    timeInForce: str = "GTC"
     signal_type: str = "MA_CROSSOVER"
     event_type: str = "trade_signal"
 

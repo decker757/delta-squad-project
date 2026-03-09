@@ -34,6 +34,8 @@ services:
       CONSUMER_GROUP_ID: strategy-service
       SHORT_WINDOW: 7
       LONG_WINDOW: 25
+      QUANTITY: 0.01
+      ORDER_TYPE: LIMIT
       LOG_LEVEL: INFO
     restart: unless-stopped
 
@@ -64,7 +66,7 @@ services:
       - kafka
     environment:
       SYMBOL: BTCUSDT
-      BINANCE_WS_BASE_URL: wss://stream.binance.com:9443/ws
+      BINANCE_WS_BASE_URL: wss://stream.binance.com:443/ws
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       MARKET_DATA_TOPIC: market_data
       RECONNECT_DELAY_SECONDS: 3

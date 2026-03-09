@@ -47,6 +47,8 @@ def main() -> None:
         publisher=publisher,
         strategy=strategy,
         logger=logger,
+        quantity=Config.QUANTITY,
+        order_type=Config.ORDER_TYPE,
     )
     service.run()
 

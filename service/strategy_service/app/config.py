@@ -14,4 +14,7 @@ class Config:
     SHORT_WINDOW = int(os.getenv("SHORT_WINDOW", "7"))
     LONG_WINDOW = int(os.getenv("LONG_WINDOW", "25"))
 
+    QUANTITY = float(os.getenv("QUANTITY", "0.01"))
+    ORDER_TYPE = os.getenv("ORDER_TYPE", "LIMIT")
+
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

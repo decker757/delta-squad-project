@@ -17,6 +17,8 @@ class StrategyService:
         publisher: KafkaPublisher,
         strategy: MACrossoverStrategy,
         logger: logging.Logger,
+        quantity: float = 0.01,
+        order_type: str = "LIMIT",
     ):
         self.symbol = symbol
         self.signal_topic = signal_topic
@@ -24,6 +26,8 @@ class StrategyService:
         self.publisher = publisher
         self.strategy = strategy
         self.logger = logger
+        self.quantity = quantity
+        self.order_type = order_type
 
     def run(self) -> None:
         def _handle_signal(_signum, _frame):
@@ -57,6 +61,9 @@ class StrategyService:
                         long_ma=result.long_ma,
                         mid=event.mid,
                         timestamp=time.time(),
+                        quantity=self.quantity,
+                        price=round(event.mid, 2),
+                        type=self.order_type,
                     )
                     self.publisher.publish(
                         topic=self.signal_topic,
